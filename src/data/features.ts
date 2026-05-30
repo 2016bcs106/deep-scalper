@@ -3,6 +3,7 @@
  * All 11 indicators are computed from raw OHLCV data.
  */
 
+/** Single candlestick bar at 1-minute resolution. */
 export interface OHLCVBar {
   timestamp: number;
   open: number;
@@ -12,6 +13,7 @@ export interface OHLCVBar {
   volume: number;
 }
 
+/** All 11 technical indicators from DeepScalper paper Table 2. */
 export interface FeatureVector {
   zopen: number;
   zhigh: number;
@@ -26,6 +28,10 @@ export interface FeatureVector {
   zd_30: number;
 }
 
+/**
+ * Computes macro-level technical indicators from OHLCV bars.
+ * Maintains an internal buffer of bars for moving average calculations.
+ */
 export class FeatureCalculator {
   private bars: OHLCVBar[] = [];
 
@@ -45,6 +51,7 @@ export class FeatureCalculator {
     return this.bars.length;
   }
 
+  /** Compute all 11 indicators for the bar at the given index. */
   computeAt(index: number): FeatureVector {
     if (index < 0 || index >= this.bars.length) {
       throw new RangeError(`Index ${index} out of bounds [0, ${this.bars.length - 1}]`);
@@ -77,6 +84,7 @@ export class FeatureCalculator {
     return this.bars.map((_, i) => this.computeAt(i));
   }
 
+  /** Convert feature object to flat array for neural network input. */
   static toArray(f: FeatureVector): number[] {
     return [f.zopen, f.zhigh, f.zlow, f.zclose, f.zadjcp,
             f.zd_5, f.zd_10, f.zd_15, f.zd_20, f.zd_25, f.zd_30];
