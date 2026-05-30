@@ -1,0 +1,28 @@
+{
+  "name": "deep-scalper",
+  "version": "0.1.0",
+  "description": "DeepScalper: Risk-Aware RL Framework for Intraday Trading",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "download-data": "tsx scripts/download-data.ts",
+    "train": "tsx scripts/train.ts",
+    "evaluate": "tsx scripts/evaluate.ts"
+  },
+  "keywords": ["reinforcement-learning", "trading", "deep-learning", "tensorflow"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.20.0",
+    "csv-parse": "^5.5.0"
+  }
+}
