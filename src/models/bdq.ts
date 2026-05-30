@@ -111,6 +111,19 @@ export class BranchingDuelingQNetwork {
     return [this.sharedNet, this.valueBranch, this.priceBranch, this.quantityBranch];
   }
 
+  /** Named sub-models for serialization. */
+  getSubModels(): { shared: tf.LayersModel; value: tf.LayersModel; price: tf.LayersModel; quantity: tf.LayersModel } {
+    return { shared: this.sharedNet, value: this.valueBranch, price: this.priceBranch, quantity: this.quantityBranch };
+  }
+
+  /** Load weights from previously saved LayersModels. */
+  loadFrom(models: { shared: tf.LayersModel; value: tf.LayersModel; price: tf.LayersModel; quantity: tf.LayersModel }): void {
+    this.sharedNet.setWeights(models.shared.getWeights());
+    this.valueBranch.setWeights(models.value.getWeights());
+    this.priceBranch.setWeights(models.price.getWeights());
+    this.quantityBranch.setWeights(models.quantity.getWeights());
+  }
+
   /** Dueling aggregation: V(s) + (A(s,a) - mean(A(s,.))) */
   private duelingCombine(value: tf.Tensor2D, advantage: tf.Tensor2D): tf.Tensor2D {
     const advMean = advantage.mean(1, true); // [batch, 1]

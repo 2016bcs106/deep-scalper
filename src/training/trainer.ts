@@ -4,6 +4,7 @@ import { TradingEnvironment, TradingEnvConfig, Action, StepResult } from '../env
 import { MacroEncoder, MicroEncoder, MarketEmbedding } from '../models/encoders.js';
 import { BranchingDuelingQNetwork } from '../models/bdq.js';
 import { VolatilityPredictor } from '../models/auxiliary.js';
+import { ModelStore, ModelMetadata } from '../models/model-store.js';
 import { PrioritizedReplayBuffer, Transition } from './replay-buffer.js';
 import { RewardCalculator, RewardConfig } from './rewards.js';
 
@@ -283,6 +284,44 @@ export class Trainer {
       epsilonEnd,
       epsilonStart - (epsilonStart - epsilonEnd) * (this.totalSteps / epsilonDecaySteps),
     );
+  }
+
+  /** Save trained model to disk for a given symbol. */
+  async saveModel(symbol: string, epochs: number, episodes: number): Promise<string> {
+    const store = new ModelStore();
+    const metadata: ModelMetadata = {
+      symbol,
+      trainedAt: new Date().toISOString(),
+      epochs,
+      episodes,
+      finalNetValue: this.env.getNetValue(),
+      config: this.config,
+    };
+
+    const subModels = this.qNetwork.getSubModels();
+    const dir = await store.save(symbol, {
+      ...subModels,
+      volatility: this.volPredictor.getModel(),
+    }, metadata);
+
+    return dir;
+  }
+
+  /** Load a previously saved model for a given symbol. */
+  async loadModel(symbol: string): Promise<ModelMetadata> {
+    const store = new ModelStore();
+    const { shared, value, price, quantity, volatility, metadata } = await store.load(symbol);
+
+    this.qNetwork.loadFrom({ shared, value, price, quantity });
+    this.targetNetwork.copyWeightsFrom(this.qNetwork);
+    this.volPredictor.loadFrom(volatility);
+
+    return metadata;
+  }
+
+  /** Get the Q-network for inference (e.g., evaluation without training). */
+  getQNetwork(): BranchingDuelingQNetwork {
+    return this.qNetwork;
   }
 
   /** Flatten observation into a fixed-size vector for the Q-network. */

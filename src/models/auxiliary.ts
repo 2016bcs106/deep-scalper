@@ -46,6 +46,16 @@ export class VolatilityPredictor {
     return this.model.layers;
   }
 
+  /** Get the underlying model for serialization. */
+  getModel(): tf.LayersModel {
+    return this.model;
+  }
+
+  /** Load weights from a previously saved model. */
+  loadFrom(model: tf.LayersModel): void {
+    this.model.setWeights(model.getWeights());
+  }
+
   /**
    * Compute realized volatility from a price sequence.
    * Volatility = variance of returns over the window.

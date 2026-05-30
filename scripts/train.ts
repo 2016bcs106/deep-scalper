@@ -1,14 +1,18 @@
 /**
- * Train a DeepScalper agent on downloaded OHLCV data.
+ * Train a DeepScalper agent on downloaded OHLCV data and save the model.
  *
  * Usage:
- *   npm run train -- data/RELIANCE_1m.csv [--epochs 5] [--train-ratio 0.8]
+ *   npm run train -- RELIANCE [--epochs 5] [--train-ratio 0.8]
+ *
+ * Expects data at data/<SYMBOL>_1m.csv (output of download-data script).
+ * Saves trained model to models/<SYMBOL>/.
  */
 
 import { DataLoader } from '../src/data/loader.ts';
 import { Trainer, EpisodeStats } from '../src/training/trainer.ts';
 
 interface TrainArgs {
+  symbol: string;
   dataPath: string;
   epochs: number;
   trainRatio: number;
@@ -18,16 +22,16 @@ function parseArgs(): TrainArgs {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args.includes('--help')) {
-    console.log('Usage: npm run train -- <data.csv> [--epochs 5] [--train-ratio 0.8]');
+    console.log('Usage: npm run train -- <SYMBOL> [--epochs 5] [--train-ratio 0.8]');
     console.log('');
     console.log('Arguments:');
-    console.log('  data.csv        Path to 1-min OHLCV CSV file (required)');
+    console.log('  SYMBOL          NSE symbol (required). Loads data/<SYMBOL>_1m.csv');
     console.log('  --epochs        Number of training passes over the data (default: 5)');
     console.log('  --train-ratio   Fraction of data used for training (default: 0.8)');
     process.exit(args.includes('--help') ? 0 : 1);
   }
 
-  const dataPath = args[0];
+  const symbol = args[0];
   let epochs = 5;
   let trainRatio = 0.8;
 
@@ -36,12 +40,13 @@ function parseArgs(): TrainArgs {
     if (args[i] === '--train-ratio' && args[i + 1]) trainRatio = parseFloat(args[++i]);
   }
 
-  return { dataPath, epochs, trainRatio };
+  return { symbol, dataPath: `data/${symbol}_1m.csv`, epochs, trainRatio };
 }
 
 async function main() {
-  const { dataPath, epochs, trainRatio } = parseArgs();
+  const { symbol, dataPath, epochs, trainRatio } = parseArgs();
 
+  console.log(`Training DeepScalper for: ${symbol}`);
   console.log(`Loading data from: ${dataPath}`);
   const loader = new DataLoader();
   const allBars = loader.loadCSV(dataPath);
@@ -94,6 +99,9 @@ async function main() {
     console.log(`  Epoch ${epoch + 1} avg net value: ${epochAvgNV.toFixed(4)}\n`);
   }
 
+  // Save trained model
+  const modelDir = await trainer.saveModel(symbol, epochs, episode);
+  console.log(`Model saved to: ${modelDir}`);
   console.log('Training complete.');
 }
 
