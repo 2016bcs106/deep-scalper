@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../src/tf.ts';
 import { VolatilityPredictor } from '../src/models/auxiliary.js';
 
 describe('VolatilityPredictor', () => {

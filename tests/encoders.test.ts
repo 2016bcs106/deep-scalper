@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../src/tf.ts';
 import { MacroEncoder, MicroEncoder, MarketEmbedding } from '../src/models/encoders.js';
 
 describe('MacroEncoder', () => {

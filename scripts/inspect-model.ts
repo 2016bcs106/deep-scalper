@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../src/tf.ts';
 import { DataLoader } from '../src/data/loader.ts';
 import { TradingEnvironment } from '../src/env/trading-env.ts';
 import { Trainer } from '../src/training/trainer.ts';

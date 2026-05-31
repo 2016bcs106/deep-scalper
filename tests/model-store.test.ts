@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { rmSync } from 'fs';
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../src/tf.ts';
 import { Trainer } from '../src/training/trainer.ts';
 import { OHLCVBar } from '../src/data/features.ts';
 

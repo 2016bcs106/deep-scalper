@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../tf.js';
 import { OHLCVBar } from '../data/features.js';
 import { TradingEnvironment, TradingEnvConfig, Action, StepResult } from '../env/trading-env.js';
 import { MacroEncoder, MicroEncoder, MarketEmbedding } from '../models/encoders.js';

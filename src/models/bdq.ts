@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../tf.js';
 
 /**
  * Branching Dueling Q-Network (BDQ) for 2D action spaces.

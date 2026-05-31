@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../tf.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 

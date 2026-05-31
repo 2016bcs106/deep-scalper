@@ -8,7 +8,7 @@
  * Saves trained model to models/<SYMBOL>/.
  */
 
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../src/tf.ts';
 import { DataLoader } from '../src/data/loader.ts';
 import { Trainer, EpisodeStats } from '../src/training/trainer.ts';
 import { TradingEnvironment } from '../src/env/trading-env.ts';

@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs-node';
+import tf from '../tf.js';
 
 /**
  * Macro-level encoder: MLP that processes OHLCV + technical indicators.
