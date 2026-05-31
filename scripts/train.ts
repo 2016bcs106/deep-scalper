@@ -70,18 +70,32 @@ async function main() {
   const activeDays = quickMode ? tradingDays.slice(0, 20) : tradingDays;
   if (quickMode) console.log(`[Quick mode] Using only ${activeDays.length} days\n`);
 
+  const totalStepsEstimate = activeDays.length * epochs * 375;
   const trainer = new Trainer({
-    batchSize: 32,
-    minBufferSize: 100,
-    bufferCapacity: 50000,
-    learningRate: 0.001,
-    trainEveryNSteps: 50,
-    targetUpdateFreq: 500,
+    batchSize: 128,
+    minBufferSize: 1000,
+    bufferCapacity: 200000,
+    learningRate: 0.0005,
+    trainEveryNSteps: quickMode ? 50 : 4,
+    targetUpdateFreq: 2000,
     epsilonStart: 1.0,
-    epsilonEnd: 0.01,
-    epsilonDecaySteps: activeDays.length * epochs * 100,
-    env: { maxPosition: 50, feeRate: 0.0003, initialCash: 100000 },
-    reward: { hindsightWeight: 0.1, hindsightHorizon: 180, inactivityPenalty: 1.0 },
+    epsilonEnd: 0.02,
+    epsilonDecaySteps: Math.floor(totalStepsEstimate * 0.6),
+    gradientClipNorm: 1.0,
+    auxiliaryWeight: 0.5,
+    env: {
+      maxPosition: 500,
+      feeRate: 0.0003,
+      initialCash: 100000,
+      priceLevels: 5,
+      quantityLevels: 5,
+    },
+    reward: {
+      hindsightWeight: 0.05,
+      hindsightHorizon: 180,
+      inactivityPenalty: 0.5,
+      feeRate: 0.0003,
+    },
   });
 
   let episode = 0;
@@ -141,7 +155,7 @@ async function main() {
   // Evaluate on held-out test data (never seen during training or validation)
   console.log('\nRunning evaluation on test data...');
   const testDays = loader.splitByDay(testBars);
-  const env = new TradingEnvironment({ maxPosition: 50, feeRate: 0.0003, initialCash: 100000 });
+  const env = new TradingEnvironment({ maxPosition: 500, feeRate: 0.0003, initialCash: 100000 });
   const qNet = trainer.getQNetwork();
   const netValues: number[] = [1.0];
 

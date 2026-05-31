@@ -58,7 +58,7 @@ async function main() {
 
   // Load trained model
   const trainer = new Trainer({
-    env: { maxPosition: 50, feeRate: 0.0003, initialCash: 100000 },
+    env: { maxPosition: 500, feeRate: 0.0003, initialCash: 100000 },
   });
 
   console.log(`Loading model from: models/${symbol}/`);
@@ -68,7 +68,7 @@ async function main() {
 
   const qNetwork = trainer.getQNetwork();
   const env = new TradingEnvironment({
-    maxPosition: 50,
+    maxPosition: 500,
     feeRate: 0.0003,
     initialCash: 100000,
   });
