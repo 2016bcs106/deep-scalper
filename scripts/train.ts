@@ -72,11 +72,13 @@ async function main() {
 
   const totalStepsEstimate = activeDays.length * epochs * 375;
   const trainer = new Trainer({
-    batchSize: 128,
-    minBufferSize: 1000,
-    bufferCapacity: 200000,
+    // Smaller batch + less buffer = lower memory (fits 1GB RAM)
+    batchSize: 32,
+    minBufferSize: 500,
+    bufferCapacity: 50000,
     learningRate: 0.0005,
-    trainEveryNSteps: quickMode ? 50 : 4,
+    // Update every 20 steps: balances learning vs memory/speed on micro
+    trainEveryNSteps: quickMode ? 50 : 20,
     targetUpdateFreq: 2000,
     epsilonStart: 1.0,
     epsilonEnd: 0.02,
@@ -84,7 +86,9 @@ async function main() {
     gradientClipNorm: 1.0,
     auxiliaryWeight: 0.5,
     env: {
-      maxPosition: 500,
+      // 100 shares max: keeps exposure at ~1.4L on RELIANCE (1.4x leverage)
+      // Prevents catastrophic losses that go below 0 net value
+      maxPosition: 100,
       feeRate: 0.0003,
       initialCash: 100000,
       priceLevels: 5,
@@ -155,7 +159,7 @@ async function main() {
   // Evaluate on held-out test data (never seen during training or validation)
   console.log('\nRunning evaluation on test data...');
   const testDays = loader.splitByDay(testBars);
-  const env = new TradingEnvironment({ maxPosition: 500, feeRate: 0.0003, initialCash: 100000 });
+  const env = new TradingEnvironment({ maxPosition: 100, feeRate: 0.0003, initialCash: 100000 });
   const qNet = trainer.getQNetwork();
   const netValues: number[] = [1.0];
 

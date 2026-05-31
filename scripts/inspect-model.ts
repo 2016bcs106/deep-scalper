@@ -8,10 +8,10 @@ const allBars = loader.loadCSV('data/RELIANCE_1m.csv');
 const { test } = loader.trainTestSplit(allBars, 0.8);
 const testDays = loader.splitByDay(test);
 
-const trainer = new Trainer({ env: { maxPosition: 500, feeRate: 0.0003, initialCash: 100000 }});
+const trainer = new Trainer({ env: { maxPosition: 100, feeRate: 0.0003, initialCash: 100000 }});
 await trainer.loadModel('RELIANCE');
 const qNet = trainer.getQNetwork();
-const env = new TradingEnvironment({ maxPosition: 500, feeRate: 0.0003, initialCash: 100000 });
+const env = new TradingEnvironment({ maxPosition: 100, feeRate: 0.0003, initialCash: 100000 });
 
 console.log(`Evaluating on ${Math.min(20, testDays.length)} test days...\n`);
 
