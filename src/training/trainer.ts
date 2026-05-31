@@ -199,9 +199,10 @@ export class Trainer {
 
     while (!this.env.isDone) {
       const stateVec = this.obsToStateVector(currentObs);
-      const stateTensor = tf.tensor2d([stateVec]);
-      const action = this.qNetwork.selectAction(stateTensor);
-      stateTensor.dispose();
+      const action = tf.tidy(() => {
+        const stateTensor = tf.tensor2d([stateVec]);
+        return this.qNetwork.selectAction(stateTensor);
+      });
 
       if (action.quantityIndex !== Math.floor(this.qNetwork.quantityLevels / 2)) {
         trades++;
@@ -228,83 +229,77 @@ export class Trainer {
       };
     }
 
-    const stateTensor = tf.tensor2d([stateVec]);
-    const action = this.qNetwork.selectAction(stateTensor);
-    stateTensor.dispose();
-    return action;
+    return tf.tidy(() => {
+      const stateTensor = tf.tensor2d([stateVec]);
+      return this.qNetwork.selectAction(stateTensor);
+    });
   }
 
-  /** Single gradient update step on a sampled batch. */
+  /** Single gradient update step on a sampled batch (vectorized, wrapped in tidy). */
   private trainStep(volatilities: number[], currentTimeStep: number): number {
     const { transitions, indices, weights } = this.buffer.sample(this.config.batchSize);
+    const batchSize = this.config.batchSize;
 
-    const states = tf.tensor2d(transitions.map(t => t.state));
-    const nextStates = tf.tensor2d(transitions.map(t => t.nextState));
-    const rewards = transitions.map(t => t.reward);
-    const dones = transitions.map(t => t.done ? 0 : 1);
+    const statesData = transitions.map(t => t.state);
+    const nextStatesData = transitions.map(t => t.nextState);
+    const rewardsArr = transitions.map(t => t.reward);
+    const donesArr = transitions.map(t => t.done ? 0 : 1);
     const priceActions = transitions.map(t => t.action.priceIndex);
     const qtyActions = transitions.map(t => t.action.quantityIndex);
 
-    // Compute TD targets using target network
-    const { priceQ: targetPriceQ, quantityQ: targetQtyQ } = this.targetNetwork.predict(nextStates);
-    const maxTargetPrice = targetPriceQ.max(1).dataSync();
-    const maxTargetQty = targetQtyQ.max(1).dataSync();
+    // Compute TD targets outside tidy (we need the JS arrays)
+    const targetValues = tf.tidy(() => {
+      const nextStates = tf.tensor2d(nextStatesData);
+      const { priceQ: targetPriceQ, quantityQ: targetQtyQ } = this.targetNetwork.predict(nextStates);
+      const maxP = targetPriceQ.max(1).dataSync();
+      const maxQ = targetQtyQ.max(1).dataSync();
+      return { maxP, maxQ };
+    });
 
-    const tdErrors: number[] = [];
+    const targets: number[] = [];
+    for (let i = 0; i < batchSize; i++) {
+      targets.push(rewardsArr[i] + this.config.gamma * donesArr[i] * (targetValues.maxP[i] + targetValues.maxQ[i]) / 2);
+    }
+
+    // Gradient update wrapped in tidy to prevent all leaks
     let loss = 0;
+    const tdErrors: number[] = new Array(batchSize);
 
-    // Q-network update
+    const states = tf.tensor2d(statesData);
     const qLoss = this.optimizer.minimize(() => {
-      const { priceQ, quantityQ } = this.qNetwork.predict(states);
+      return tf.tidy(() => {
+        const { priceQ, quantityQ } = this.qNetwork.predict(states);
 
-      let totalLoss = tf.scalar(0);
+        const priceMask = tf.oneHot(priceActions, this.qNetwork.priceLevels);
+        const qtyMask = tf.oneHot(qtyActions, this.qNetwork.quantityLevels);
 
-      for (let i = 0; i < this.config.batchSize; i++) {
-        const target = rewards[i] + this.config.gamma * dones[i] *
-          (maxTargetPrice[i] + maxTargetQty[i]) / 2;
+        const selectedPriceQ = priceQ.mul(priceMask).sum(1);
+        const selectedQtyQ = quantityQ.mul(qtyMask).sum(1);
+        const currentQ = selectedPriceQ.add(selectedQtyQ).div(2);
 
-        const pQ = priceQ.slice([i, priceActions[i]], [1, 1]).reshape([]);
-        const qQ = quantityQ.slice([i, qtyActions[i]], [1, 1]).reshape([]);
-        const currentQ = pQ.add(qQ).div(2);
+        const targetsTensor = tf.tensor1d(targets);
+        const weightsTensor = tf.tensor1d(weights);
+        const tdTensor = targetsTensor.sub(currentQ);
+        const weightedLoss = tdTensor.square().mul(weightsTensor).mean();
 
-        const td = tf.scalar(target).sub(currentQ);
-        const weightedTd = td.square().mul(weights[i]);
-        totalLoss = totalLoss.add(weightedTd) as tf.Scalar;
+        // Store TD errors for priority update
+        const tdData = tdTensor.abs().dataSync();
+        for (let i = 0; i < batchSize; i++) tdErrors[i] = tdData[i];
 
-        tdErrors.push(Math.abs(target - currentQ.dataSync()[0]));
+        // Auxiliary volatility loss
+        const volIdx = Math.min(currentTimeStep, volatilities.length - 1);
+        const actualVol = tf.tensor2d([[volatilities[volIdx]]]).tile([batchSize, 1]);
+        const volLoss = this.volPredictor.loss(states, actualVol);
 
-        pQ.dispose();
-        qQ.dispose();
-        currentQ.dispose();
-        td.dispose();
-        weightedTd.dispose();
-      }
+        const combined = weightedLoss.add(volLoss.mul(this.config.auxiliaryWeight));
+        loss = combined.dataSync()[0];
 
-      // Auxiliary volatility loss
-      const volIdx = Math.min(currentTimeStep, volatilities.length - 1);
-      const actualVol = tf.tensor2d([[volatilities[volIdx]]]).tile([this.config.batchSize, 1]);
-      const volLoss = this.volPredictor.loss(states, actualVol);
-      actualVol.dispose();
-
-      const combined = totalLoss.div(this.config.batchSize).add(volLoss.mul(this.config.auxiliaryWeight));
-      loss = combined.dataSync()[0];
-
-      priceQ.dispose();
-      quantityQ.dispose();
-      volLoss.dispose();
-      totalLoss.dispose();
-
-      return combined as tf.Scalar;
+        return combined as tf.Scalar;
+      });
     }, true);
 
-    // Update priorities
     this.buffer.updatePriorities(indices, tdErrors);
-
-    // Cleanup
     states.dispose();
-    nextStates.dispose();
-    targetPriceQ.dispose();
-    targetQtyQ.dispose();
     if (qLoss) qLoss.dispose();
 
     return loss;
