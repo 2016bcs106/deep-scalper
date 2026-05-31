@@ -114,6 +114,8 @@ async function main() {
 
   let episode = 0;
   let lastEpochStats: EpisodeStats[] = [];
+  let bestValNV = -Infinity;
+  let bestEpoch = 0;
 
   function logMemory() {
     const mem = process.memoryUsage();
@@ -173,17 +175,31 @@ async function main() {
 
     console.log(`  Epoch ${epoch + 1} val avg net value:   ${valAvgNV.toFixed(4)} (gap: ${gap > 0 ? '+' : ''}${gap.toFixed(4)}) | val trades: ${valTrades}`);
 
+    // Save best model based on validation performance
+    if (valAvgNV > bestValNV) {
+      bestValNV = valAvgNV;
+      bestEpoch = epoch + 1;
+      await trainer.saveModel(symbol, epochs, episode);
+      console.log(`  ✓ New best model saved (val NV: ${valAvgNV.toFixed(4)})`);
+    }
+
     // Overfitting detection: train >> val means memorization
     if (gap > 0.05) {
       console.log(`  ⚠️  Overfitting detected (train-val gap > 5%). Stopping early.`);
+      console.log(`  Best model is from epoch ${bestEpoch} (val NV: ${bestValNV.toFixed(4)})`);
       break;
     }
     console.log('');
   }
 
-  // Save trained model
-  const modelDir = await trainer.saveModel(symbol, epochs, episode);
-  console.log(`Model saved to: ${modelDir}`);
+  // Load best model back for evaluation (in case early stopping used a later epoch)
+  if (bestEpoch > 0) {
+    await trainer.loadModel(symbol);
+    console.log(`\nUsing best model from epoch ${bestEpoch} (val NV: ${bestValNV.toFixed(4)})`);
+  } else {
+    const modelDir = await trainer.saveModel(symbol, epochs, episode);
+    console.log(`Model saved to: ${modelDir}`);
+  }
 
   // Evaluate on held-out test data (never seen during training or validation)
   console.log('\nRunning evaluation on test data...');
