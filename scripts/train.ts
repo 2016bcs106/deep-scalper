@@ -13,6 +13,16 @@ import { DataLoader } from '../src/data/loader.ts';
 import { Trainer, EpisodeStats } from '../src/training/trainer.ts';
 import { TradingEnvironment } from '../src/env/trading-env.ts';
 import { MetricsCalculator } from '../src/evaluation/metrics.ts';
+
+// Log crashes and signals so we know why the process died
+process.on('uncaughtException', (err) => {
+  console.error(`\n[FATAL] Uncaught exception: ${err.message}`);
+  console.error(`[FATAL] Memory: RSS ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)}MB`);
+  console.error(err.stack);
+  process.exit(1);
+});
+process.on('SIGTERM', () => { console.error('\n[KILLED] Received SIGTERM (likely OOM killer)'); process.exit(137); });
+process.on('SIGINT', () => { console.error('\n[KILLED] Received SIGINT'); process.exit(130); });
 import { EmailNotifier } from '../src/evaluation/notifier.ts';
 
 interface TrainArgs {
@@ -105,6 +115,14 @@ async function main() {
   let episode = 0;
   let lastEpochStats: EpisodeStats[] = [];
 
+  function logMemory() {
+    const mem = process.memoryUsage();
+    const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
+    return `RSS: ${mb(mem.rss)}MB | Heap: ${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB`;
+  }
+
+  console.log(`[Memory] ${logMemory()}\n`);
+
   for (let epoch = 0; epoch < epochs; epoch++) {
     console.log(`--- Epoch ${epoch + 1}/${epochs} ---`);
     const epochStats: EpisodeStats[] = [];
@@ -113,19 +131,30 @@ async function main() {
     for (const dayBars of activeDays) {
       if (dayBars.length < 10) continue;
 
-      const stats = trainer.trainEpisode(dayBars);
-      stats.episode = ++episode;
-      epochStats.push(stats);
+      let stats: EpisodeStats;
+      try {
+        stats = trainer.trainEpisode(dayBars);
+        stats.episode = ++episode;
+        epochStats.push(stats);
+      } catch (err: any) {
+        console.error(`\n[ERROR] Episode ${episode + 1} crashed: ${err.message}`);
+        console.error(`[ERROR] ${logMemory()}`);
+        console.error(`[ERROR] TF tensors alive: ${tf.memory().numTensors}`);
+        console.error(err.stack);
+        throw err;
+      }
 
       if (episode % 10 === 0) {
         const avgReward = epochStats.slice(-10).reduce((s, e) => s + e.totalReward, 0) / 10;
         const avgNetVal = epochStats.slice(-10).reduce((s, e) => s + e.netValue, 0) / 10;
+        const tensors = tf.memory().numTensors;
         console.log(
           `  Episode ${episode} | ` +
           `Reward: ${avgReward.toFixed(2)} | ` +
           `Net Value: ${avgNetVal.toFixed(4)} | ` +
           `Epsilon: ${stats.epsilon.toFixed(3)} | ` +
-          `Loss: ${stats.avgLoss.toFixed(4)}`
+          `Loss: ${stats.avgLoss.toFixed(4)} | ` +
+          `Tensors: ${tensors} | ${logMemory()}`
         );
       }
     }
