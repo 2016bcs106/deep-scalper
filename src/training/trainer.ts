@@ -32,6 +32,8 @@ export interface TrainerConfig {
   bufferCapacity: number;
   /** Minimum buffer size before training starts. */
   minBufferSize: number;
+  /** Max gradient norm for clipping (prevents exploding gradients). */
+  gradientClipNorm: number;
   /** Reward function config. */
   reward: Partial<RewardConfig>;
   /** Trading environment config. */
@@ -50,6 +52,7 @@ const DEFAULT_CONFIG: TrainerConfig = {
   auxiliaryWeight: 1.0,
   bufferCapacity: 100000,
   minBufferSize: 1000,
+  gradientClipNorm: 1.0,
   reward: {},
   env: {},
 };
@@ -183,6 +186,32 @@ export class Trainer {
       epsilon: this.epsilon,
       avgLoss: lossCount > 0 ? totalLoss / lossCount : 0,
     };
+  }
+
+  /**
+   * Run one episode with greedy policy (no exploration, no training).
+   * Used for validation to detect overfitting.
+   */
+  validateEpisode(dayBars: OHLCVBar[]): { netValue: number; trades: number } {
+    const obs = this.env.reset(dayBars);
+    let currentObs = obs;
+    let trades = 0;
+
+    while (!this.env.isDone) {
+      const stateVec = this.obsToStateVector(currentObs);
+      const stateTensor = tf.tensor2d([stateVec]);
+      const action = this.qNetwork.selectAction(stateTensor);
+      stateTensor.dispose();
+
+      if (action.quantityIndex !== Math.floor(this.qNetwork.quantityLevels / 2)) {
+        trades++;
+      }
+
+      const result = this.env.step(action);
+      currentObs = result.observation;
+    }
+
+    return { netValue: this.env.getNetValue(), trades };
   }
 
   /** Current exploration rate. */

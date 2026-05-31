@@ -55,11 +55,14 @@ async function main() {
   console.log(`Loading data from: ${dataPath}`);
   const loader = new DataLoader();
   const allBars = loader.loadCSV(dataPath);
-  const { train: trainBars } = loader.trainTestSplit(allBars, trainRatio);
+
+  // 3-way split: train 60% / validation 20% / test 20% (prevents overfitting to test set)
+  const { train: trainBars, val: valBars, test: testBars } = loader.trainValTestSplit(allBars, 0.6, 0.2);
   const tradingDays = loader.splitByDay(trainBars);
+  const valDays = loader.splitByDay(valBars);
 
   console.log(`Total bars: ${allBars.length}`);
-  console.log(`Training days: ${tradingDays.length}`);
+  console.log(`Train days: ${tradingDays.length} | Val days: ${valDays.length} | Test days: ${loader.splitByDay(testBars).length}`);
   console.log(`Epochs: ${epochs}\n`);
 
   // Use only first 20 days for quick test runs, full data otherwise
@@ -110,16 +113,33 @@ async function main() {
     }
 
     const epochAvgNV = epochStats.reduce((s, e) => s + e.netValue, 0) / epochStats.length;
-    console.log(`  Epoch ${epoch + 1} avg net value: ${epochAvgNV.toFixed(4)}\n`);
+    console.log(`  Epoch ${epoch + 1} train avg net value: ${epochAvgNV.toFixed(4)}`);
+
+    // Validation: run greedy policy on validation days (no training)
+    const valResults = valDays
+      .filter(d => d.length >= 10)
+      .slice(0, quickMode ? 5 : valDays.length)
+      .map(d => trainer.validateEpisode(d));
+    const valAvgNV = valResults.reduce((s, r) => s + r.netValue, 0) / valResults.length;
+    const valTrades = valResults.reduce((s, r) => s + r.trades, 0);
+    const gap = epochAvgNV - valAvgNV;
+
+    console.log(`  Epoch ${epoch + 1} val avg net value:   ${valAvgNV.toFixed(4)} (gap: ${gap > 0 ? '+' : ''}${gap.toFixed(4)}) | val trades: ${valTrades}`);
+
+    // Overfitting detection: train >> val means memorization
+    if (gap > 0.05) {
+      console.log(`  ⚠️  Overfitting detected (train-val gap > 5%). Stopping early.`);
+      break;
+    }
+    console.log('');
   }
 
   // Save trained model
   const modelDir = await trainer.saveModel(symbol, epochs, episode);
   console.log(`Model saved to: ${modelDir}`);
 
-  // Evaluate on test data
+  // Evaluate on held-out test data (never seen during training or validation)
   console.log('\nRunning evaluation on test data...');
-  const { test: testBars } = loader.trainTestSplit(allBars, trainRatio);
   const testDays = loader.splitByDay(testBars);
   const env = new TradingEnvironment({ maxPosition: 50, feeRate: 0.0003, initialCash: 100000 });
   const qNet = trainer.getQNetwork();

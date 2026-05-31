@@ -22,16 +22,18 @@ export class BranchingDuelingQNetwork {
   readonly priceLevels: number;
   readonly quantityLevels: number;
 
-  constructor(inputSize: number, priceLevels = 5, quantityLevels = 5, hiddenSize = 128) {
+  constructor(inputSize: number, priceLevels = 5, quantityLevels = 5, hiddenSize = 128, dropoutRate = 0.2) {
     this.inputSize = inputSize;
     this.priceLevels = priceLevels;
     this.quantityLevels = quantityLevels;
 
-    // Shared feature network
+    // Shared feature network with dropout to prevent memorization
     const sharedInput = tf.input({ shape: [inputSize] });
     const s1 = tf.layers.dense({ units: hiddenSize, activation: 'relu' }).apply(sharedInput);
-    const s2 = tf.layers.dense({ units: hiddenSize, activation: 'relu' }).apply(s1);
-    this.sharedNet = tf.model({ inputs: sharedInput, outputs: s2 as tf.SymbolicTensor });
+    const s1d = tf.layers.dropout({ rate: dropoutRate }).apply(s1);
+    const s2 = tf.layers.dense({ units: hiddenSize, activation: 'relu' }).apply(s1d);
+    const s2d = tf.layers.dropout({ rate: dropoutRate }).apply(s2);
+    this.sharedNet = tf.model({ inputs: sharedInput, outputs: s2d as tf.SymbolicTensor });
 
     // State value branch: V(s) -> scalar
     const vInput = tf.input({ shape: [hiddenSize] });

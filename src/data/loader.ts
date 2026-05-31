@@ -75,6 +75,17 @@ export class DataLoader {
     };
   }
 
+  /** Chronological 3-way split: train / validation / test (prevents overfitting to test set). */
+  trainValTestSplit(bars: OHLCVBar[], trainRatio = 0.6, valRatio = 0.2): { train: OHLCVBar[]; val: OHLCVBar[]; test: OHLCVBar[] } {
+    const trainEnd = Math.floor(bars.length * trainRatio);
+    const valEnd = Math.floor(bars.length * (trainRatio + valRatio));
+    return {
+      train: bars.slice(0, trainEnd),
+      val: bars.slice(trainEnd, valEnd),
+      test: bars.slice(valEnd),
+    };
+  }
+
   private recordToBar(record: Record<string, string>): OHLCVBar {
     const { timestampColumn, openColumn, highColumn, lowColumn, closeColumn, volumeColumn, dateFormat } = this.options;
 
