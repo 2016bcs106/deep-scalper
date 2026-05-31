@@ -13,12 +13,15 @@ export interface RewardConfig {
   hindsightHorizon: number;
   /** Transaction fee rate. */
   feeRate: number;
+  /** Penalty applied each step the agent holds zero position (encourages trading). */
+  inactivityPenalty: number;
 }
 
 const DEFAULT_CONFIG: RewardConfig = {
   hindsightWeight: 0.1,
   hindsightHorizon: 180,
   feeRate: 0.0003,
+  inactivityPenalty: 0,
 };
 
 /**
@@ -58,7 +61,10 @@ export class RewardCalculator {
     const basic = this.basicReward(prices[t], prices[t + 1], position, tradeAmount);
     const bonus = this.hindsightBonus(prices, t, position);
 
-    return basic + bonus;
+    // Penalize inactivity: agent gets negative reward for holding no position
+    const inactivity = position === 0 ? -this.config.inactivityPenalty : 0;
+
+    return basic + bonus + inactivity;
   }
 
   /** Hindsight bonus: lambda * (price_{t+H} - price_t) * position. */

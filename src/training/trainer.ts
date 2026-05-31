@@ -18,6 +18,8 @@ export interface TrainerConfig {
   batchSize: number;
   /** How often to sync target network (in steps). */
   targetUpdateFreq: number;
+  /** Perform a gradient update every N environment steps. */
+  trainEveryNSteps: number;
   /** Starting exploration rate. */
   epsilonStart: number;
   /** Final exploration rate. */
@@ -41,6 +43,7 @@ const DEFAULT_CONFIG: TrainerConfig = {
   gamma: 0.99,
   batchSize: 64,
   targetUpdateFreq: 500,
+  trainEveryNSteps: 10,
   epsilonStart: 1.0,
   epsilonEnd: 0.01,
   epsilonDecaySteps: 10000,
@@ -154,15 +157,15 @@ export class Trainer {
         done: result.done,
       });
 
-      // Train on a batch if buffer is ready
-      if (this.buffer.size >= this.config.minBufferSize) {
+      // Train on a batch every N steps if buffer is ready
+      this.totalSteps++;
+      if (this.buffer.size >= this.config.minBufferSize && this.totalSteps % this.config.trainEveryNSteps === 0) {
         const loss = this.trainStep(volatilities, step);
         totalLoss += loss;
         lossCount++;
       }
 
       // Update target network periodically
-      this.totalSteps++;
       if (this.totalSteps % this.config.targetUpdateFreq === 0) {
         this.targetNetwork.copyWeightsFrom(this.qNetwork);
       }

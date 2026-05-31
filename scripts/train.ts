@@ -60,13 +60,15 @@ async function main() {
   const trainer = new Trainer({
     batchSize: 64,
     minBufferSize: 500,
-    bufferCapacity: 50000,
+    bufferCapacity: 100000,
     learningRate: 0.001,
+    trainEveryNSteps: 10,
+    targetUpdateFreq: 1000,
     epsilonStart: 1.0,
     epsilonEnd: 0.01,
-    epsilonDecaySteps: tradingDays.length * epochs * 300,
+    epsilonDecaySteps: tradingDays.length * epochs * 375,
     env: { maxPosition: 50, feeRate: 0.0003, initialCash: 100000 },
-    reward: { hindsightWeight: 0.1, hindsightHorizon: 180 },
+    reward: { hindsightWeight: 0.1, hindsightHorizon: 180, inactivityPenalty: 1.0 },
   });
 
   let episode = 0;
